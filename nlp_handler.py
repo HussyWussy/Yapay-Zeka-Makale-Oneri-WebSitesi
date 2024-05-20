@@ -1,7 +1,7 @@
+from collections import Counter
 import os
 from pathlib import Path
 import numpy as np
-import test2
 import pandas as pd
 from transformers import AutoModel, AutoTokenizer
 from sklearn.metrics.pairwise import cosine_similarity
@@ -31,7 +31,9 @@ class nlp_handler():
     __static_lemmatizer__ = None
     __static_stop_words__ = None
     __inspec__data_set_path__ = 'res/dataset/Inspec/docsutf8'
+    __inspec_keys__data_set_path__ = 'res/dataset/Inspec/keys'
     __inspec_data_set__ = []
+    __inspec_data_set_keys__ = []
     __fasttext_model_path__ = 'res/wiki.en.bin'
     __static_inspec_scibert_vectors__ :list = []
     __static_inspec_fasttext_vectors__ :list = []
@@ -42,6 +44,16 @@ class nlp_handler():
                     with open(os.path.join(self.__inspec__data_set_path__, file_name), 'r', encoding='utf-8') as file:
                         abstract = file.read()
                         self.__inspec_data_set__.append(abstract)
+        
+        for file_name in os.listdir(self.__inspec_keys__data_set_path__):
+                if file_name.endswith('.key'):
+                    with open(os.path.join(self.__inspec_keys__data_set_path__, file_name), 'r', encoding='utf-8') as file:
+                        abstract = file.read()
+                        keys = []
+                        for item in abstract.split(sep=('\n')):
+                            if(item!=''):
+                                keys.append(item)
+                        self.__inspec_data_set_keys__.append(keys)
         
         
         self.__static_stemmer__ = PorterStemmer()
@@ -81,8 +93,21 @@ class nlp_handler():
             with open('fasttext_vectors.pkl', 'wb') as f:
                 pickle.dump(self.__static_inspec_fasttext_vectors__, f)
     
-    def get_scibert_results(self,sentence = "",interests = [] , history = []):
+    
+    def get_frequent_keys(self,how_many_keys_to_get):
+        all_keys=[]
+        for sublist  in self.__inspec_data_set_keys__:
+            for item in sublist:
+                    all_keys.append(item)
+        keys_count = Counter(all_keys)
+        top_keys = keys_count.most_common(how_many_keys_to_get)
+        
+        return top_keys
+        
+    
+    def get_scibert_results(self,sentence = "",interests = [] , approved_history = [] , disapproved_history = []):
         vectors_to_average = []
+        
         if(sentence!=""):
             tokenized_scentence = self.__pre_process_scibert_sentence__(sentence,self. __static_scibert_model_tokenizer__)
             sentence = self.__get_scibert_sentence_embedding__(self.__static_scibert_model__,tokenized_scentence,self.__static_scibert_model_tokenizer__) 
@@ -98,12 +123,27 @@ class nlp_handler():
             interests_mean = torch.mean(torch.stack(temp_interest_vectors),dim=0)
             vectors_to_average.append(interests_mean)
 
-        if(history != []):
-            vectors_to_average.append(history)
-            pass
-        return self.__get_similar_from_list__(self.__static_inspec_scibert_vectors__,torch.mean(torch.stack(vectors_to_average),dim=0))
+        if(approved_history != []):
+            approved_history_vectors = []
+            for doc in approved_history:
+                tokenized_history = self.__pre_process_scibert_sentence__(doc,self.__static_scibert_model_tokenizer__)
+                history_vector = self.__get_scibert_sentence_embedding__(self.__static_scibert_model__,tokenized_history,self.__static_scibert_model_tokenizer__)
+                approved_history_vectors.append(history_vector)
+            history_mean = torch.mean(torch.stack(approved_history_vectors),dim=0)
+            vectors_to_average.append(history_mean)
+        
+        if vectors_to_average == []:
+            return []
+        
+        return self.__get_similar_from_list__(self.__static_inspec_scibert_vectors__,torch.mean(torch.stack(vectors_to_average),dim=0),disapproved_history,interests)
     
-    def get_fasttext_results(self,sentence = "",interests = [] , history = []):
+    
+    
+    ################################################################################################################################################################################################
+    
+    
+    
+    def get_fasttext_results(self,sentence = "",interests = [] , approved_history = [] , disapproved_history = []):
         vectors_to_average = []
         if(sentence!=""):
             tokenized_scentence = self.__pre_process_fasttext_sentence__(sentence,self.__static_stemmer__,self.__static_lemmatizer__,self.__static_stop_words__)
@@ -116,14 +156,27 @@ class nlp_handler():
             for interest in interests:
                 tokenized_interest = self.__pre_process_fasttext_sentence__(interest,self.__static_stemmer__,self.__static_lemmatizer__,self.__static_stop_words__)
                 vector = self.__get_fasttext_embedding__(self.__static_fasttext_model__,tokenized_interest)
-                temp_interest_vectors.append(vector)
-            interests_mean = torch.mean(torch.stack(temp_interest_vectors),dim=0)
+                temp_interest_vectors.append(torch.tensor(vector))
+            stacked_vectors = torch.stack(temp_interest_vectors)
+            interests_mean = torch.mean(stacked_vectors,dim=0)
             vectors_to_average.append(interests_mean)
 
-        if(history != []):
-            vectors_to_average.append(history)
+        if(approved_history != []):
+            approved_history_vectors = []
+            for doc in approved_history:
+                tokenized_history = self.__pre_process_fasttext_sentence__(doc,self.__static_stemmer__,self.__static_lemmatizer__,self.__static_stop_words__)
+                history_vector = self.__get_fasttext_embedding__(self.__static_fasttext_model__,tokenized_history)
+                approved_history_vectors.append(torch.tensor(history_vector))
+                
+            stacked_history_vectors = torch.stack(approved_history_vectors)
+            history_mean = torch.mean(stacked_history_vectors,dim=0)
+            vectors_to_average.append(history_mean)
             pass
-        return self.__get_similar_from_list__(self.__static_inspec_fasttext_vectors__,torch.mean(torch.stack(vectors_to_average),dim=0))
+        
+        if vectors_to_average == []:
+            return []
+        
+        return self.__get_similar_from_list__(self.__static_inspec_fasttext_vectors__,torch.mean(torch.stack(vectors_to_average),dim=0),disapproved_history,interests)
     
     
     def __get_fasttext_embedding__(self,model,tokenized_text):
@@ -186,8 +239,9 @@ class nlp_handler():
         #print(sentence_embedding.sum())
         return sentence_embedding
 
-    def __get_similar_from_list__(self,vectors_list,vector_to_search):
+    def __get_similar_from_list__(self,vectors_list,vector_to_search,disapproved_history = [],user_interests = []):
         similars_list = []
+        
         if vector_to_search.ndim == 1:
             vector_to_search = np.expand_dims(vector_to_search, axis=0)
             
@@ -195,13 +249,19 @@ class nlp_handler():
             if vector.ndim == 1:
                 vector = np.expand_dims(vector, axis=0)
             similarity = cosine_similarity(vector, vector_to_search)
-            similars_list.append((i,similarity))
+            if disapproved_history.count(self.__inspec_data_set__[i]) <= 0 :
+                similars_list.append((i,similarity))
             # print(similarity)
             
         similars_list.sort(key=lambda x: x[1], reverse=True)
-        self.__inspec_data_set__
         ids = [item[0] for item in similars_list[:5]]
-        data = [self.__inspec_data_set__[id] for id in ids]
+        a = []
+       # data = [{'data': self.__inspec_data_set__[id], 'key': self.__inspec_data_set_keys__[id]} for id in ids]
+        data = [{'data': self.__inspec_data_set__[id], 
+         'key': self.__inspec_data_set_keys__[id],
+         'precision': any(key in user_interests for key in self.__inspec_data_set_keys__[id])} 
+        for id in ids]
+
         return data
     
     def __get_scibert_doc_embedding__(self,scibert_model,text,tokenizer,stemmer,lemmatizer,stop_words):

@@ -1,0 +1,9 @@
+/res/
+
+*.pkl
+
+/.vs/
+
+/.vscode/
+
+/__pycache__/
