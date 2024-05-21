@@ -16,6 +16,7 @@ import { auth } from '../firebase/config.js';
 import { onAuthStateChanged, signInWithEmailAndPassword } from 'firebase/auth';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
 
 const defaultTheme = createTheme();
 
@@ -107,11 +108,11 @@ export default function SignIn() {
               Sign In
             </Button>
             <Grid container>
-              <Grid item>
-                <Link href="#" variant="body2">
-                  {"Don't have an account? Sign Up"}
-                </Link>
-              </Grid>
+            <Grid item>
+              <Link component={RouterLink} to="/signup" variant="body2">
+                {"Don't have an account? Sign Up"}
+              </Link>
+            </Grid>
             </Grid>
           </Box>
         </Box>

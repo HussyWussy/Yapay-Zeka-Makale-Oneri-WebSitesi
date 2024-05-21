@@ -37,9 +37,9 @@ export default function SignUp() {
   const handleInterestChange = (event) => {
     const interest = event.target.name;
     if (event.target.checked) {
-      setInterests([...interests, interest]); // ilgi alanlarını ekleyin
+      setInterests([...interests, interest]); 
     } else {
-      setInterests(interests.filter(item => item !== interest)); // ilgi alanlarını kaldırın
+      setInterests(interests.filter(item => item !== interest)); 
     }
   };
   
@@ -150,7 +150,7 @@ export default function SignUp() {
                   variant="contained"
                   sx={{ mt: 3, mb: 2 }}
               >
-                Sign Up
+                Sign Up 
               </Button>
               <Grid container justifyContent="flex-end">
                 <Grid item>
@@ -160,7 +160,11 @@ export default function SignUp() {
                 </Grid>
               </Grid>
               <Grid container spacing={2} sx={{ mt: 2 }}>
-                {['coding', 'design', 'marketing'].map((interest) => (
+                {['Internet','academic libraries','business data processing','computational complexity','computer science education','control system synthesis','decision theory',
+    'differential equations','electronic commerce','electronic publishing','feedback','fuzzy logic','gender issues','graph theory','human factors','information resources',
+    'iterative methods','library automation','matrix algebra','medical computing','mobile computing','neural nets','nonlinear control systems','optimisation','polynomials',
+    'probability','psychology','robust control','stability','statistical analysis'
+].map((interest) => (
                     <Grid item xs={6} key={interest}>
                       <FormControlLabel
                           control={<Checkbox onChange={handleInterestChange} name={interest} />}
